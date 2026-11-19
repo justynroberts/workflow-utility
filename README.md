@@ -11,13 +11,22 @@ pdwf export   →   pd-workflows-acme-20261119-1300/*.yaml   →   pdwf import
 
 ## Get running (5 minutes)
 
-**1. Install.** You need [Go 1.24+](https://go.dev/dl/) (`brew install go` on macOS).
+**1. Install.** On macOS or Linux, run this one line:
 
 ```bash
-gh repo clone justynroberts/workflow-utility   # or git clone
-cd workflow-utility
-make install                                   # builds and copies pdwf to ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/justynroberts/workflow-utility/main/install.sh | sh
 ```
+
+It downloads the right binary for your machine from the [latest release](https://github.com/justynroberts/workflow-utility/releases/latest), verifies its checksum, and puts it in `~/.local/bin` (use `PREFIX=/usr/local/bin` to change that).
+
+<details>
+<summary>Other ways: manual download, Windows, or build from source</summary>
+
+- **Manual:** download `pdwf-<os>-<cpu>` from the [releases page](https://github.com/justynroberts/workflow-utility/releases/latest), then `chmod +x` it and move it onto your PATH as `pdwf`. On macOS, a file downloaded **with a browser** is blocked as being "from an unidentified developer". Clear that with `xattr -d com.apple.quarantine pdwf`. The curl installer doesn't have this problem.
+- **Windows:** download `pdwf-windows-amd64.exe`, rename it to `pdwf.exe`, and run it from PowerShell.
+- **From source** (needs [Go 1.24+](https://go.dev/dl/)): `git clone https://github.com/justynroberts/workflow-utility && cd workflow-utility && make install`.
+
+</details>
 
 Open a **new terminal** and check it works from anywhere:
 
@@ -151,5 +160,11 @@ Step inputs are copied exactly, so **review files before sharing or committing t
 make build      # ./bin/pdwf
 make test       # unit + end-to-end tests against a fake PagerDuty (no network)
 make lint       # gofmt + go vet
-make release    # binaries for macOS / Linux / Windows in ./dist
+make release    # binaries for macOS / Linux / Windows + checksums.txt in ./dist
 ```
+
+To publish a release: `git tag vX.Y.Z && git push --tags && make clean release && gh release create vX.Y.Z dist/*`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

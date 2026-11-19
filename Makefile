@@ -25,12 +25,15 @@ install: build ## Copy pdwf into ~/.local/bin (override with PREFIX=...)
 	chmod 0755 $(PREFIX)/$(BINARY)
 	@echo "installed $(PREFIX)/$(BINARY) - open a new terminal (or run: rehash) and type: pdwf help"
 
-release: ## Cross-compile for macOS, Linux and Windows into ./dist
-	@mkdir -p dist
-	GOOS=darwin  GOARCH=arm64 go build -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-darwin-arm64 .
-	GOOS=darwin  GOARCH=amd64 go build -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-darwin-amd64 .
-	GOOS=linux   GOARCH=amd64 go build -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-linux-amd64 .
-	GOOS=windows GOARCH=amd64 go build -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-windows-amd64.exe .
+release: ## Cross-compile for macOS, Linux and Windows into ./dist, with checksums.txt
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-linux-arm64 .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist/$(BINARY)-windows-amd64.exe .
+	cd dist && shasum -a 256 $(BINARY)-* > checksums.txt
+	@cat dist/checksums.txt
 
 clean: ## Remove build output
 	rm -rf bin dist

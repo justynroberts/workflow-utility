@@ -340,17 +340,17 @@ func TestWarnings(t *testing.T) {
 	f.Workflow.Steps[0].Inputs = OrderedMap{
 		{"User", "PUSER01"},
 		{"Long", "Q0ABCDEFGHIJK1"},
-		{"Conn", "a2045914-9116-4928-b8b1-3a00055aee55"},
+		{"Conn", "11111111-2222-4333-8444-555555555555"},
 		{"Word", "PRIORITY"},       // letters only but 8 chars matching [A-Z0-9]: see below
 		{"Short", "P12345"},        // too short
 		{"Lower", "puser01"},       // lowercase
 		{"Sentence", "P1 is high"}, // spaces
-		{"Upper UUID", "A2045914-9116-4928-B8B1-3A00055AEE55"},
+		{"Upper UUID", "11111111-2222-4333-8444-555555555555"},
 		{"Num", 1234567},
 	}
 	f.Workflow.Steps[0].InlineSteps = InlineStepsMap{{Name: "Then", Steps: []Step{{Name: "Inner", Action: "a:b", Inputs: OrderedMap{{"Schedule", "PZMYJFZ"}}}}}}
 	w := strings.Join(Warnings(f), "\n")
-	for _, want := range []string{`"PUSER01"`, `"Q0ABCDEFGHIJK1"`, `"a2045914-9116-4928-b8b1-3a00055aee55"`, `step "Outer > Inner" input "Schedule"`} {
+	for _, want := range []string{`"PUSER01"`, `"Q0ABCDEFGHIJK1"`, `"11111111-2222-4333-8444-555555555555"`, `step "Outer > Inner" input "Schedule"`} {
 		if !strings.Contains(w, want) {
 			t.Errorf("warnings missing %s:\n%s", want, w)
 		}

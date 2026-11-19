@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -138,6 +139,11 @@ func (m *InlineStepsMap) UnmarshalYAML(n *yaml.Node) error {
 	}
 	out := InlineStepsMap{}
 	for i := 0; i+1 < len(n.Content); i += 2 {
+		// node.Decode does not inherit the decoder's KnownFields(true), so
+		// check nested step keys here or typos would be silently dropped.
+		if err := checkStepKeys(n.Content[i+1]); err != nil {
+			return err
+		}
 		var steps []Step
 		if err := n.Content[i+1].Decode(&steps); err != nil {
 			return err
@@ -145,6 +151,25 @@ func (m *InlineStepsMap) UnmarshalYAML(n *yaml.Node) error {
 		out = append(out, InlineBlock{n.Content[i].Value, steps})
 	}
 	*m = out
+	return nil
+}
+
+var stepKeys = map[string]bool{"name": true, "description": true, "action": true, "action_description": true, "inputs": true, "inline_steps": true}
+
+func checkStepKeys(seq *yaml.Node) error {
+	if seq.Kind != yaml.SequenceNode {
+		return nil // Decode reports the type error with a line number
+	}
+	for _, step := range seq.Content {
+		if step.Kind != yaml.MappingNode {
+			continue
+		}
+		for j := 0; j+1 < len(step.Content); j += 2 {
+			if k := step.Content[j]; !stepKeys[k.Value] {
+				return fmt.Errorf("line %d: field %s not found in type wffile.Step (check the spelling and indentation of that key)", k.Line, k.Value)
+			}
+		}
+	}
 	return nil
 }
 
@@ -157,7 +182,7 @@ const header = `# PagerDuty incident workflow, exported by pdwf.
 # different PagerDuty account as long as teams/services with the same names exist.
 #
 #   Check it:   pdwf validate %s
-#   Import it:  pdwf import --env <target> %s   (shows a plan, asks before changing anything)
+#   Import it:  pdwf import %s   (asks for the target account's key, shows a plan first)
 #
 `
 
@@ -174,7 +199,23 @@ func Marshal(f *File, filename string) ([]byte, error) {
 	if err := enc.Close(); err != nil {
 		return nil, err
 	}
-	return unescapeUnicode(buf.Bytes()), nil
+	raw := buf.Bytes()
+	pretty := unescapeUnicode(raw)
+	if !bytes.Equal(pretty, raw) && !sameContent(raw, pretty) {
+		// The readable form would change a value (e.g. a value that literally
+		// contains "\U0001F510"), so keep the escaped, exact form.
+		return raw, nil
+	}
+	return pretty, nil
+}
+
+// sameContent reports whether two renderings decode to identical data.
+func sameContent(a, b []byte) bool {
+	var x, y any
+	if yaml.Unmarshal(a, &x) != nil || yaml.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
 }
 
 // Load reads and strictly parses a file: unknown keys (typos) are errors.
@@ -276,6 +317,22 @@ func Warnings(f *File) []string {
 		}
 	}
 	walk(f.Workflow.Steps, "")
+	return out
+}
+
+// ActionIDs lists every action a file uses, with the step names using each.
+func ActionIDs(f *File) map[string][]string {
+	out := map[string][]string{}
+	var walk func([]Step)
+	walk = func(steps []Step) {
+		for _, s := range steps {
+			out[s.Action] = append(out[s.Action], s.Name)
+			for _, b := range s.InlineSteps {
+				walk(b.Steps)
+			}
+		}
+	}
+	walk(f.Workflow.Steps)
 	return out
 }
 

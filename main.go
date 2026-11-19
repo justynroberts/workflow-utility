@@ -57,6 +57,7 @@ func (app *App) dispatch(ctx context.Context, args []string) error {
 	}
 	cmd, rest := args[0], args[1:]
 	stdout := app.Out
+	helpOutput = app.Out
 	switch cmd {
 	case "help", "-h", "--help":
 		return app.cmdHelp(rest)
@@ -87,7 +88,7 @@ func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 	for {
 		if err := fs.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
-				fs.SetOutput(os.Stdout)
+				fs.SetOutput(helpOutput)
 				fs.Usage()
 				return nil, errHelpShown
 			}
@@ -104,6 +105,9 @@ func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 		args = args[1:]
 	}
 }
+
+// helpOutput is where "pdwf <command> -h" prints; dispatch points it at App.Out.
+var helpOutput io.Writer = os.Stdout
 
 func newFlagSet(name, synopsis string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)

@@ -268,6 +268,17 @@ func (c *Client) CreateTrigger(ctx context.Context, t Trigger) (Trigger, error) 
 	return out.T, err
 }
 
+// CheckAction asks whether the account can use an action. It returns nil if
+// PagerDuty knows the action, or an *APIError (404 unknown, 403 not approved
+// for this account). Note: the full action list (/incident_workflows/actions)
+// omits older versions that still work, so it must not be used for this.
+// A nil result is not a guarantee: some actions pass this lookup and are
+// still refused when the workflow is created (seen with Kubernetes actions on
+// an EU account), and import reports those at write time.
+func (c *Client) CheckAction(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodGet, "/incident_workflows/actions/"+url.PathEscape(id), nil, nil, nil)
+}
+
 // AddTriggerService subscribes an existing trigger to one more service.
 func (c *Client) AddTriggerService(ctx context.Context, triggerID, serviceID string) error {
 	body := map[string]any{"service": map[string]string{"id": serviceID}}

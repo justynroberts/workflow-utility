@@ -22,12 +22,16 @@ type fakePD struct {
 }
 
 type account struct {
-	host      string
-	teams     []map[string]any
-	services  []map[string]any
-	workflows []map[string]any
-	triggers  []map[string]any
-	nextID    int
+	host    string
+	actions []string
+	// writeRejects are actions that pass the lookup but are refused on create,
+	// like Kubernetes list-objects on the live EU account.
+	writeRejects []string
+	teams        []map[string]any
+	services     []map[string]any
+	workflows    []map[string]any
+	triggers     []map[string]any
+	nextID       int
 }
 
 func (a *account) id(prefix string) string {
@@ -61,8 +65,24 @@ func (f *fakePD) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": map[string]any{"message": "Invalid Input Provided", "errors": []string{"Invalid body: &#x5b;0&#x5d;.value is not allowed to be empty"}}})
 			return
 		}
+		raw, _ := json.Marshal(body)
+		for _, a := range acct.writeRejects {
+			if strings.Contains(string(raw), `"`+a+`"`) {
+				reply(404, map[string]any{"error": map[string]any{"message": "Could not find actions", "errors": []string{`Action "` + a + `" not found`}}})
+				return
+			}
+		}
 	}
 	switch {
+	case r.Method == "GET" && strings.HasPrefix(p, "/incident_workflows/actions/"):
+		id := strings.TrimPrefix(p, "/incident_workflows/actions/")
+		for _, a := range acct.actions {
+			if a == id {
+				reply(200, map[string]any{"action": map[string]any{"id": id}})
+				return
+			}
+		}
+		reply(404, map[string]any{"error": map[string]any{"message": "action '" + id + "' not found"}})
 	case r.Method == "GET" && p == "/teams":
 		reply(200, map[string]any{"teams": acct.teams, "more": false})
 	case r.Method == "GET" && p == "/services":
@@ -189,6 +209,7 @@ func newFake(t *testing.T) (*fakePD, *httptest.Server) {
 	t.Helper()
 	src := &account{
 		host:     "acme.pagerduty.com",
+		actions:  []string{"pagerduty.com:incident-workflows:send-status-update:1", "pagerduty.com:logic:if-else:1", "pagerduty.com:incident-workflows:add-note:1"},
 		teams:    []map[string]any{{"id": "PTEAMSRC", "name": "SRE"}},
 		services: []map[string]any{{"id": "PSVCSRC1", "name": "Checkout API"}},
 		triggers: []map[string]any{{
@@ -202,6 +223,7 @@ func newFake(t *testing.T) (*fakePD, *httptest.Server) {
 	src.workflows = []map[string]any{mustJSON(t, sourceWorkflow)}
 	dst := &account{
 		host:     "acme-staging.pagerduty.com",
+		actions:  []string{"pagerduty.com:incident-workflows:send-status-update:1", "pagerduty.com:logic:if-else:1", "pagerduty.com:incident-workflows:add-note:1"},
 		teams:    []map[string]any{{"id": "PTEAMDST", "name": "sre"}}, // different ID, name case differs
 		services: []map[string]any{{"id": "PSVCDST1", "name": "Checkout API"}, {"id": "PSVCDST2", "name": "Payments"}},
 	}
@@ -478,5 +500,22 @@ func TestImportOnOffEndToEnd(t *testing.T) {
 	}
 	if _, err := pdwf(t, "import", "--token", "dst-key", "--enable", "--disable", out); err == nil {
 		t.Fatal("--enable with --disable should be refused")
+	}
+}
+
+func TestImportRefusesActionMissingInTarget(t *testing.T) {
+	fake, dir := setup(t)
+	out := filepath.Join(dir, "export")
+	if log, err := pdwf(t, "export", "--token", "src-key", "--out", out); err != nil {
+		t.Fatalf("%v\n%s", err, log)
+	}
+	// The target's catalogue lacks the nested add-note action (like EU lacking list-objects).
+	fake.accounts["dst-key"].actions = fake.accounts["dst-key"].actions[:2]
+	log, err := pdwf(t, "import", "--token", "dst-key", "--yes", out)
+	if err == nil || !strings.Contains(log, "pagerduty.com:incident-workflows:add-note:1 does not exist") || !strings.Contains(log, "Add note") {
+		t.Fatalf("expected missing-action error naming the step, got %v\n%s", err, log)
+	}
+	if len(fake.writes) != 0 {
+		t.Fatalf("wrote despite missing action: %v", fake.writes)
 	}
 }

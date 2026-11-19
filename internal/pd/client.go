@@ -17,9 +17,13 @@ import (
 	"time"
 )
 
-const (
+// Variables (not constants) so tests can point the two regions at fakes.
+var (
 	USBaseURL = "https://api.pagerduty.com"
 	EUBaseURL = "https://api.eu.pagerduty.com"
+)
+
+const (
 	pageLimit = 100
 )
 
@@ -81,12 +85,15 @@ func (e *APIError) Error() string {
 func (e *APIError) Hint() string {
 	switch e.Status {
 	case http.StatusUnauthorized:
-		return "the API token was rejected. Use a REST API key (Integrations > API Access Keys), not an Events/integration key. If the account is hosted in the EU, add --region eu."
+		return "the API token was rejected. Use a REST API key (Integrations > API Access Keys), not an Events/integration key. (pdwf already tried both the US and EU API.)"
 	case http.StatusForbidden:
 		return "the token is valid but not allowed to do this. Use a read-write account API key, or a user token belonging to an Admin/Manager."
 	case http.StatusPaymentRequired:
 		return "this PagerDuty account's plan does not include Incident Workflows."
 	case http.StatusNotFound:
+		if strings.Contains(e.Message, "Could not find actions") {
+			return "this account will not accept the action(s) above, so the workflow was not created (nothing was changed). The actions on offer differ between accounts and regions (EU has fewer), and some need an integration set up first. Leave this file out, or replace those steps."
+		}
 		if strings.HasPrefix(e.Path, "/incident_workflows") {
 			return "not found. Check the region (--region eu) and that the account has Incident Workflows."
 		}

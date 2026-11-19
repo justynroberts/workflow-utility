@@ -17,8 +17,13 @@ lint: ## gofmt check + go vet
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run: gofmt -w ." && exit 1)
 	go vet ./...
 
-install: ## Install pdwf into $GOPATH/bin
-	go install -ldflags '$(LDFLAGS)' .
+PREFIX ?= $(HOME)/.local/bin
+
+install: build ## Copy pdwf into ~/.local/bin (override with PREFIX=...)
+	mkdir -p $(PREFIX)
+	cp bin/$(BINARY) $(PREFIX)/$(BINARY)
+	chmod 0755 $(PREFIX)/$(BINARY)
+	@echo "installed $(PREFIX)/$(BINARY) - open a new terminal (or run: rehash) and type: pdwf help"
 
 release: ## Cross-compile for macOS, Linux and Windows into ./dist
 	@mkdir -p dist

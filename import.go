@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -253,6 +254,30 @@ func (a *App) cmdImport(ctx context.Context, args []string) error {
 		}
 	}
 
+	// Ask the target about every action the files use (once each). Only a
+	// definite "no" (404 unknown / 403 not approved) blocks the import.
+	actionProblem := map[string]string{}
+	checked := map[string]bool{}
+	for _, it := range items {
+		for id := range wffile.ActionIDs(it.file) {
+			if checked[id] {
+				continue
+			}
+			checked[id] = true
+			err := t.Client.CheckAction(ctx, id)
+			var ae *pd.APIError
+			switch {
+			case err == nil:
+			case errors.As(err, &ae) && ae.Status == 404:
+				actionProblem[id] = "does not exist in " + t.Host
+			case errors.As(err, &ae) && ae.Status == 403 && ae.Message != "":
+				actionProblem[id] = fmt.Sprintf("is refused by %s (%s)", t.Host, strings.TrimSuffix(ae.Message, "."))
+			default:
+				a.say("🟡 could not check action %s in advance (%s); PagerDuty will check it when importing", id, err)
+			}
+		}
+	}
+
 	var plan []planItem
 	var problems []string
 	for _, it := range items {
@@ -264,6 +289,22 @@ func (a *App) cmdImport(ctx context.Context, args []string) error {
 		w, trs, errs := res.ToAPI(&f)
 		for _, e := range errs {
 			problems = append(problems, fmt.Sprintf("%s: %s", it.path, e))
+		}
+		used := wffile.ActionIDs(it.file)
+		var bad []string
+		for id := range used {
+			if actionProblem[id] != "" {
+				bad = append(bad, id)
+			}
+		}
+		sort.Strings(bad)
+		for _, id := range bad {
+			steps := used[id]
+			if len(steps) > 3 {
+				steps = append(steps[:3], fmt.Sprintf("+%d more", len(used[id])-3))
+			}
+			problems = append(problems, fmt.Sprintf("%s: action %s %s (used by: %s). Accounts and regions offer different actions.",
+				it.path, id, actionProblem[id], strings.Join(steps, ", ")))
 		}
 		pi.workflow, pi.triggers = w, trs
 		matches := byName[strings.ToLower(strings.TrimSpace(it.file.Workflow.Name))]
@@ -291,7 +332,7 @@ func (a *App) cmdImport(ctx context.Context, args []string) error {
 		plan = append(plan, pi)
 	}
 	if len(problems) > 0 {
-		a.say("🔴 Nothing imported. These must be fixed first:")
+		a.say("🔴 Nothing imported. These must be fixed first (or leave the affected files out):")
 		for _, p := range problems {
 			a.say("  - %s", p)
 		}

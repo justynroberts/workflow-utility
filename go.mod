@@ -1,10 +1,10 @@
 module github.com/justynroberts/workflow-utility
 
-go 1.27.3
+go 1.24
 
 require (
-	golang.org/x/term v0.48.0
+	golang.org/x/term v0.30.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require golang.org/x/sys v0.50.0 // indirect
+require golang.org/x/sys v0.31.0 // indirect

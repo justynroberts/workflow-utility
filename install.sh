@@ -59,8 +59,13 @@ echo "Installed $("$PREFIX/pdwf" version | tail -1) to $PREFIX/pdwf"
 
 case ":$PATH:" in
   *":$PREFIX:"*) echo "Run: pdwf help" ;;
-  *) echo
-     echo "$PREFIX is not on your PATH. Add it, e.g.:"
-     echo "  echo 'export PATH=\"$PREFIX:\$PATH\"' >> ~/.zshrc && exec zsh"
-     echo "or run it directly: $PREFIX/pdwf help" ;;
+  *) case "${SHELL:-}" in
+       */zsh)  rc="$HOME/.zshrc" ;;
+       */bash) rc="$HOME/.bashrc" ;;
+       *)      rc="$HOME/.profile" ;;
+     esac
+     echo
+     echo "$PREFIX is not on your PATH. Add it with:"
+     echo "  echo 'export PATH=\"$PREFIX:\$PATH\"' >> $rc"
+     echo "then open a new terminal, or run it directly now: $PREFIX/pdwf help" ;;
 esac

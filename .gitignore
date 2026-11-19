@@ -1,0 +1,6 @@
+bin/
+dist/
+# exports and backups written by pdwf when run from the repo
+pd-workflows-*/
+pdwf-backup-*/
+.DS_Store
